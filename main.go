@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 	// "github.com/mattmuroya/go-booking-app/common"
 )
 
@@ -15,10 +17,26 @@ var remainingTickets uint = 50
 
 // arrays in go have type of: fixed (maximum) size and variable type, ie [50]string
 // a Slice is an abstraction of an Array with dynamic size, ie []string
-var bookings []string
+// var bookings = []string{}
 
 // bookings := []string{} // alt var syntax for implied type with empty slice initial assignment
 // this alt syntax cannot be used at the package level
+
+// initialize a slice of maps (see func bookTickets for details)
+// var bookings = make([]map[string]string, 0) // 0 initial length
+
+// structs are kind of like classes or interfaces, however doesn't support inheritance
+type UserData struct {
+	firstName       string
+	lastName        string
+	email           string
+	numberOfTickets uint
+}
+
+var wg = sync.WaitGroup{}
+
+// initialize an empty list of UserData structs
+var bookings = make([]UserData, 0) // 0 initial length
 
 func main() {
 	greetUsers()
@@ -37,6 +55,12 @@ func main() {
 		}
 
 		bookTickets(userTickets, firstName, lastName, email)
+		// go keyword starts a new "goroutine," an abstracted, lightweight thread managed by go runtime
+		// note the main goroutine does not wait for other goroutines to complete,
+		// so if main is exited before sendTickets completes, sendTicket gets terminated
+		// need to create a WaitGroup "wg" (package level) to tell main to wait for sendTickets
+		wg.Add(1) // set number of goroutines for main routine to wait for (completed when wg.Done() is called)
+		go sendTickets(userTickets, firstName, lastName, email)
 
 		fmt.Printf("Current bookings: %v\n", getFirstNames())
 
@@ -46,6 +70,8 @@ func main() {
 			break
 		}
 	}
+	// waits for all threads added to wg to complete before main exits
+	wg.Wait()
 }
 
 func greetUsers() {
@@ -93,10 +119,28 @@ func ValidateUserInput(email string, userTickets uint) (bool, bool) {
 func bookTickets(userTickets uint, firstName string, lastName string, email string) {
 	remainingTickets = remainingTickets - userTickets
 
+	// // maps contain unique key-value pairs typed: map[<key_type>]<value_type>
+	// // all keys share the same data type and all values share the same data type
+	// // built-in function make(<map_type>) creates an empty map
+	// var userData = make(map[string]string)
+	// userData["firstName"] = firstName
+	// userData["lastName"] = lastName
+	// userData["email"] = email
+	// // need to format uint as a string (base 10) since maps cannot mix data types
+	// userData["numberOfTickets"] = strconv.FormatUint(uint64(userTickets), 10)
+
+	// instead of map, use a struct to allow mixed data types:
+	var userData = UserData{
+		firstName:       firstName,
+		lastName:        lastName,
+		email:           email,
+		numberOfTickets: userTickets, // doesn't require type conversion
+	}
+
 	// you can set a value to a specific Array index like this:
 	// bookings[0] = firstName + " " + lastName
 	// but can also just append() the value to a Slick
-	bookings = append(bookings, firstName+" "+lastName)
+	bookings = append(bookings, userData)
 
 	fmt.Printf("Thank you, %v %v! You have have booked %v tickets. You will receive a confirmation email at %v.\n",
 		firstName, lastName, userTickets, email)
@@ -111,8 +155,23 @@ func getFirstNames() []string {
 	for _, booking := range bookings {
 		// strings.Fields(string) takes the string and splits it at white space;
 		// strings.Fields("Sundar Pichai" => ["Sundar", "Pichai"])
-		var names = strings.Fields(booking)
-		firstNames = append(firstNames, names[0])
+		// var names = strings.Fields(booking)
+		// firstNames = append(firstNames, names[0])
+
+		// however, since bookings is now a list of structs, not strings:
+		firstNames = append(firstNames, booking.firstName)
 	}
 	return firstNames
+}
+
+func sendTickets(userTickets uint, firstName string, lastName string, email string) {
+	time.Sleep(3 * time.Second)
+	// Sprintf returns formatted string
+	var tickets = fmt.Sprintf("%v tickets for %v %v", userTickets, firstName, lastName)
+	fmt.Println("##################")
+	fmt.Println("Sending tickets...")
+	fmt.Printf("%v sent to email address: %v\n", tickets, email)
+	fmt.Println("##################")
+
+	wg.Done() // removes thread from wg
 }
